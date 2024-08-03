@@ -1,24 +1,20 @@
-import csv
+import os
+from dotenv import load_dotenv
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
-class CSVUtils:
-    @staticmethod
-    def write_to_csv(data, filename):
-        if not data:
-            return
+def load_env_variables():
+    load_dotenv()
 
-        fieldnames = ["name", "title", "email", "linkedin"]
-        
-        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            for row in data:
-                writer.writerow(row)
-
-    @staticmethod
-    def read_from_csv(filename):
-        data = []
-        with open(filename, 'r', encoding='utf-8') as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                data.append(row)
-        return data
+def setup_webdriver():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    
+    # Use webdriver_manager to automatically download and manage ChromeDriver
+    service = Service(ChromeDriverManager().install())
+    
+    return webdriver.Chrome(service=service, options=chrome_options)
