@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from scraper import ScraperEngine
+from scraper_engine import ScraperEngine
 from utils.csv_utils import CSVUtils
 from utils.utils import load_env_variables
 
