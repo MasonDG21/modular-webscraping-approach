@@ -6,7 +6,7 @@
 ## Features
     Modular Architecture: The scraping tool will be refactored into separate, reusable modules.
 ### New Modules:
-- `GoogleSearch:` Handles Google search operations (if needed in future iterations).
+- `GoogleSearch:` Handles Google search queries (if needed in future iterations).
 - `ContactInfoExtractor:` Extracts contact information from web pages.
 - `CSVUtils:` Manages CSV operations (reading, writing, deduplication).
 - `EmailUtils:` Handles email sending functionality (if needed in future iterations).
