@@ -55,6 +55,9 @@ class ContactInfoExtractor:
             # Extract information from specific HTML elements
             contact_info.extend(self._extract_from_elements(soup, url))
             
+            # Ensure each item in contact_info has at least one required key
+            contact_info = [item for item in contact_info if any(key in item for key in ['email', 'name', 'linkedin'])]
+            
             return contact_info
         except Exception as e:
             logging.error(f"Error extracting contact info from {url}: {str(e)}")

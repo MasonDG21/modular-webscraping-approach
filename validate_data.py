@@ -7,12 +7,25 @@ class DataValidator:
         self.linkedin_pattern = re.compile(r'^https?://(?:www\.)?linkedin\.com/in/[\w\-]+/?$')
 
     def validate_contact_info(self, info):
-        if not self.validate_name(info['name']):
+        if not isinstance(info, dict):
             return False
-        if info['email'] != 'not_found' and not self.validate_email(info['email']):
+
+        # Check if at least one of email, name, or linkedin is present
+        if not any(key in info for key in ['email', 'name', 'linkedin']):
             return False
-        if info['linkedin'] != 'not_found' and not self.validate_linkedin(info['linkedin']):
-            return False
+
+        if 'email' in info and info['email'] != 'not_found':
+            if not self.validate_email(info['email']):
+                return False
+
+        if 'name' in info and info['name'] != 'not_found':
+            if not self.validate_name(info['name']):
+                return False
+
+        if 'linkedin' in info and info['linkedin'] != 'not_found':
+            if not self.validate_linkedin(info['linkedin']):
+                return False
+
         return True
 
     def validate_name(self, name):

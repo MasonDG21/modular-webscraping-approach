@@ -26,9 +26,12 @@ class AsyncScraper:
             'events', 'blog', 'support', 'founder', 'who-we-are', 'management',
             'about-us', 'mission', 'locations', 'values', 'help', 'our-team', 'contact'
         ]
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
 
     async def scrape(self, start_url):
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(headers=self.headers) as session:
             queue = asyncio.PriorityQueue()
             await queue.put((0, start_url, 0))  # (priority, url, depth)
             results = []
@@ -76,44 +79,6 @@ class AsyncScraper:
         except Exception as e:
             logging.error(f"Unexpected error fetching {url}: {str(e)}")
         return None
-
-    async def enqueue_related_urls(self, queue, html, base_url, current_depth):
-        if current_depth >= self.max_depth or len(self.seen_urls) >= self.max_pages_per_domain:
-            return
-
-        soup = BeautifulSoup(html, 'html.parser')
-        links = soup.find_all('a', href=True)
-        
-        for link in links:
-            url = urljoin(base_url, link['href'])
-            if self.is_valid_url(base_url, url) and url not in self.seen_urls:
-                relevance_score = self.calculate_relevance_score(link, url)
-                if relevance_score > 0:
-                    await queue.put((100 - relevance_score, url, current_depth + 1))  # Lower score = higher priority
-
-    def is_valid_url(self, start_url, url):
-        base_domain = urlparse(start_url).netloc
-        url_domain = urlparse(url).netloc
-        return base_domain == url_domain and url not in self.seen_urls
-    
-    def calculate_relevance_score(self, link, url):
-        relevance_score = 0
-        
-        # check URL structure
-        url_path = urlparse(url).path.lower()
-        if any(keyword in url_path for keyword in self.relevant_keywords):
-            relevance_score += 5
-        
-        # check link text
-        link_text = link.text.lower()
-        if any(keyword in link_text for keyword in self.relevant_keywords):
-            relevance_score += 3
-        
-        # prioritize shorter paths
-        path_depth = url_path.count('/')
-        relevance_score += max(0, 3 - path_depth)
-        
-        return relevance_score
 
 async def main(urls):
     scraper = AsyncScraper()
