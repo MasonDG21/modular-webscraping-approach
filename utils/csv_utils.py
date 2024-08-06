@@ -12,7 +12,9 @@ class CSVUtils:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
             for row in data:
-                writer.writerow(row)
+                # Ensure all fields are present, even if empty
+                row_dict = {field: row.get(field, '') for field in fieldnames}
+                writer.writerow(row_dict)
 
     @staticmethod
     def read_from_csv(filename):
