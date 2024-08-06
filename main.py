@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import asyncio
-from async_engine import AsyncScraper
+from async_engine import main as scrape_main
 from validate_data import DataValidator
 from utils.csv_utils import CSVUtils
 from utils.utils import load_env_variables
@@ -28,16 +28,17 @@ class ScraperGUI:
             messagebox.showerror("Error", "Please enter at least one URL.")
             return
 
-        scraper = AsyncScraper()
         validator = DataValidator()
         
-        asyncio.run(self.run_scraper(scraper, validator, urls))
+        asyncio.run(self.run_scraper(validator, urls))
 
-    async def run_scraper(self, scraper, validator, urls):
+    async def run_scraper(self, validator, urls):
+        results = await scrape_main(urls)
         all_results = []
-        for url in urls:
-            results = await scraper.scrape(url)
-            validated_results = [result for result in results if validator.validate_contact_info(result)]
+        for url, url_results in results.items():
+            validated_results = [result for result in url_results if validator.validate_contact_info(result)]
+            for result in validated_results:
+                result['source_url'] = url  # Add source URL to each result
             all_results.extend(validated_results)
 
         if all_results:
