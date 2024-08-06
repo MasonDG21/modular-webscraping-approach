@@ -5,6 +5,9 @@ from bs4 import BeautifulSoup
 from contact_info import ContactInfoExtractor
 import argparse
 import json
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class AsyncScraper:
     def __init__(self, max_depth=3, max_pages_per_domain=50):
@@ -40,7 +43,7 @@ class AsyncScraper:
                 self.seen_urls.add(url)
                 html = await self.fetch_html(session, url)
                 if html:
-                    page_results = self.extractor.extract_contact_info(url)
+                    page_results = self.extractor.extract_contact_info(url, html)
                     results.extend(page_results)
 
                     if depth < self.max_depth:
@@ -50,11 +53,18 @@ class AsyncScraper:
 
     async def fetch_html(self, session, url):
         try:
-            async with session.get(url) as response:
-                return await response.text()
+            async with session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    return await response.text()
+                else:
+                    logging.error(f"Error fetching {url}: HTTP status {response.status}")
+        except aiohttp.ClientError as e:
+            logging.error(f"Error fetching {url}: {str(e)}")
+        except asyncio.TimeoutError:
+            logging.error(f"Timeout error fetching {url}")
         except Exception as e:
-            print(f"Error fetching {url}: {str(e)}")
-            return None
+            logging.error(f"Unexpected error fetching {url}: {str(e)}")
+        return None
 
     async def enqueue_related_urls(self, queue, html, base_url, current_depth):
         if current_depth >= self.max_depth or len(self.seen_urls) >= self.max_pages_per_domain:
@@ -94,13 +104,17 @@ class AsyncScraper:
         
         return relevance_score
 
-# Usage
+# usage
 async def main(urls):
     scraper = AsyncScraper()
     all_results = {}
     for url in urls:
-        results = await scraper.scrape(url)
-        all_results[url] = results
+        try:
+            results = await scraper.scrape(url)
+            all_results[url] = results
+        except Exception as e:
+            logging.error(f"Error scraping {url}: {str(e)}")
+            all_results[url] = []
     return all_results
 
 if __name__ == "__main__":

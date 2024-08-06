@@ -2,6 +2,9 @@ import re
 from bs4 import BeautifulSoup
 import requests
 from urllib.parse import urljoin
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class ContactInfoExtractor:
     def __init__(self):
@@ -37,11 +40,9 @@ class ContactInfoExtractor:
             'Quality Assurance Manager', 'Regulatory Affairs Manager', 'Patent Agent', 'Legal Counsel'
         ]
 
-    def extract_contact_info(self, url):
+    def extract_contact_info(self, url, html):
         try:
-            response = requests.get(url)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup = BeautifulSoup(html, 'html.parser')
             
             contact_info = []
             
@@ -55,63 +56,75 @@ class ContactInfoExtractor:
             contact_info.extend(self._extract_from_elements(soup, url))
             
             return contact_info
-        except requests.RequestException as e:
-            print(f"Error fetching {url}: {str(e)}")
+        except Exception as e:
+            logging.error(f"Error extracting contact info from {url}: {str(e)}")
             return []
 
     def _extract_from_text(self, text):
         info = {}
         
-        # Extract email
-        emails = self.email_pattern.findall(text)
-        if emails:
-            info['email'] = emails[0]
-        
-        # Extract names
-        names = self.name_pattern.findall(text)
-        if names:
-            info['name'] = names[0]
-        
-        # Extract titles
-        for keyword in self.title_keywords:
-            if keyword.lower() in text.lower():
-                info['title'] = text
-                break
+        try:
+            # Extract email
+            emails = self.email_pattern.findall(text)
+            if emails:
+                info['email'] = emails[0]
+            
+            # Extract names
+            names = self.name_pattern.findall(text)
+            if names:
+                info['name'] = names[0]
+            
+            # Extract titles
+            for keyword in self.title_keywords:
+                if keyword.lower() in text.lower():
+                    info['title'] = text
+                    break
+        except Exception as e:
+            logging.error(f"Error extracting info from text: {str(e)}")
         
         return info if info else None
 
     def _extract_from_elements(self, soup, base_url):
         contact_info = []
         
-        # Extract from meta tags
-        for tag in soup.find_all('meta'):
-            name = tag.get('name', '').lower()
-            content = tag.get('content', '')
-            if 'description' in name or 'keywords' in name:
-                info = self._extract_from_text(content)
-                if info:
-                    contact_info.append(info)
-        
-        # Extract from specific elements often used for contact info
-        for elem in soup.find_all(['a', 'p', 'div', 'span']):
-            if 'contact' in elem.get('class', []) or 'contact' in elem.get('id', ''):
-                info = self._extract_from_text(elem.get_text())
-                if info:
-                    contact_info.append(info)
+        try:
+            # Extract from meta tags
+            for tag in soup.find_all('meta'):
+                name = tag.get('name', '').lower()
+                content = tag.get('content', '')
+                if 'description' in name or 'keywords' in name:
+                    info = self._extract_from_text(content)
+                    if info:
+                        contact_info.append(info)
             
-            # Extract emails from href attributes
-            href = elem.get('href', '')
-            if href.startswith('mailto:'):
-                contact_info.append({'email': href[7:]})
-            
-            # Extract LinkedIn profiles
-            if 'linkedin.com/in/' in href:
-                contact_info.append({'linkedin': urljoin(base_url, href)})
+            # Extract from specific elements often used for contact info
+            for elem in soup.find_all(['a', 'p', 'div', 'span']):
+                if 'contact' in elem.get('class', []) or 'contact' in elem.get('id', ''):
+                    info = self._extract_from_text(elem.get_text())
+                    if info:
+                        contact_info.append(info)
+                
+                # Extract emails from href attributes
+                href = elem.get('href', '')
+                if href.startswith('mailto:'):
+                    contact_info.append({'email': href[7:]})
+                
+                # Extract LinkedIn profiles
+                if 'linkedin.com/in/' in href:
+                    contact_info.append({'linkedin': urljoin(base_url, href)})
+        except Exception as e:
+            logging.error(f"Error extracting info from elements: {str(e)}")
         
         return contact_info
 
 # Usage example
 if __name__ == "__main__":
     extractor = ContactInfoExtractor()
-    results = extractor.extract_contact_info("https://example.com")
+    sample_html = """
+    <html><body>
+    <p>John Doe - CEO</p>
+    <p>Email: john.doe@example.com</p>
+    </body></html>
+    """
+    results = extractor.extract_contact_info("https://example.com", sample_html)
     print(results)
