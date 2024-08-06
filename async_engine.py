@@ -6,6 +6,7 @@ from contact_info import ContactInfoExtractor
 import argparse
 import json
 import logging
+import socket
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -53,13 +54,23 @@ class AsyncScraper:
 
     async def fetch_html(self, session, url):
         try:
+            # First, try to resolve the domain
+            domain = urlparse(url).netloc
+            try:
+                socket.gethostbyname(domain)
+            except socket.gaierror:
+                logging.error(f"DNS resolution failed for {domain}")
+                return None
+
             async with session.get(url, timeout=10) as response:
                 if response.status == 200:
                     return await response.text()
                 else:
                     logging.error(f"Error fetching {url}: HTTP status {response.status}")
+        except aiohttp.ClientConnectorError as e:
+            logging.error(f"Connection error for {url}: {str(e)}")
         except aiohttp.ClientError as e:
-            logging.error(f"Error fetching {url}: {str(e)}")
+            logging.error(f"Client error for {url}: {str(e)}")
         except asyncio.TimeoutError:
             logging.error(f"Timeout error fetching {url}")
         except Exception as e:
@@ -104,12 +115,13 @@ class AsyncScraper:
         
         return relevance_score
 
-# usage
 async def main(urls):
     scraper = AsyncScraper()
     all_results = {}
     for url in urls:
         try:
+            if not url.startswith('http'):
+                url = 'http://' + url
             results = await scraper.scrape(url)
             all_results[url] = results
         except Exception as e:

@@ -21,7 +21,7 @@ class ScraperGUI:
         self.scrape_button = tk.Button(master, text="Start Scraping", command=self.start_scraping)
         self.scrape_button.pack()
 
-        self.log_text = scrolledtext.ScrolledText(master, height=10, width=50)
+        self.log_text = scrolledtext.ScrolledText(master, height=20, width=80)
         self.log_text.pack()
 
         # Create a custom logger
