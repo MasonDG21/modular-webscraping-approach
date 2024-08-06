@@ -1,77 +1,117 @@
 import re
-import logging
 from bs4 import BeautifulSoup
+import requests
 from urllib.parse import urljoin
 
 class ContactInfoExtractor:
     def __init__(self):
-        self.logger = logging.getLogger(self.__class__.__name__)
         self.email_pattern = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
-        self.name_pattern = re.compile(r'^[A-Z][a-z]+(?: [A-Z][a-z]+)+$')
+        self.name_pattern = re.compile(r'\b[A-Z][a-z]+(?: [A-Z][a-z]+)+\b')
         self.title_keywords = [
-            'engineer', 'manager', 'director', 'ceo', 'cto', 'founder', 'president', 
-            'vice president', 'vp', 'lead', 'head', 'chief', 'scientist', 'analyst'
+            'CEO', 'CTO', 'CFO', 'COO', 'President', 'Vice President', 'Director',
+            'Manager', 'Engineer', 'Developer', 'Designer', 'Analyst', 'Specialist',
+            'Coordinator', 'Administrator', 'Supervisor', 'Lead', 'Head', 'Chief',
+            'Technician', 'Scientist', 'Pilot', 'Inspector', 'Consultant', 'Architect',
+            'Operator', 'Instructor', 'Planner', 'Strategist', 'Estimator', 'Fabricator',
+            'Assembler', 'Machinist', 'Welder', 'Mechanic', 'Tester', 'Trainer',
+            'Project Manager', 'Program Manager', 'Systems Engineer', 'Avionics Engineer',
+            'Test Engineer', 'Flight Engineer', 'Manufacturing Engineer', 'Quality Engineer',
+            'Structural Engineer', 'Aerospace Engineer', 'Electrical Engineer', 'Software Engineer',
+            'Mechanical Engineer', 'Materials Engineer', 'Safety Engineer', 'Reliability Engineer',
+            'Design Engineer', 'Research Scientist', 'Principal Investigator', 'Field Service Engineer',
+            'Compliance Manager', 'Logistics Manager', 'Supply Chain Manager', 'Production Manager',
+            'Operations Manager', 'Business Development Manager', 'Customer Service Manager',
+            'Integration Engineer', 'Mission Manager', 'Payload Specialist', 'Propulsion Engineer',
+            'Satellite Engineer', 'Thermal Engineer', 'Dynamics Engineer', 'RF Engineer',
+            'Guidance, Navigation, and Control (GNC) Engineer', 'Ordnance Engineer', 'Launch Director',
+            'Ground Systems Engineer', 'Mission Operations Engineer', 'Systems Architect',
+            'Configuration Manager', 'Risk Manager', 'Test Technician', 'Calibration Technician',
+            'Electronics Technician', 'Maintenance Technician', 'Program Analyst', 'Budget Analyst',
+            'Contract Administrator', 'Procurement Specialist', 'Inventory Manager', 'Supply Chain Analyst',
+            'IT Manager', 'Cybersecurity Specialist', 'Data Scientist', 'AI Specialist', 'Robotics Engineer',
+            'Control Systems Engineer', 'Optical Engineer', 'Spacecraft Operations Specialist',
+            'Business Analyst', 'Marketing Manager', 'Sales Manager', 'Communications Manager',
+            'Human Resources Manager', 'Talent Acquisition Specialist', 'Training Coordinator',
+            'Safety Manager', 'Environmental Engineer', 'Sustainability Manager', 'Innovation Manager',
+            'Customer Support Engineer', 'Technical Support Specialist', 'Field Operations Manager',
+            'Quality Assurance Manager', 'Regulatory Affairs Manager', 'Patent Agent', 'Legal Counsel'
         ]
 
-    def extract_contact_info(self, url, html):
-        soup = BeautifulSoup(html, 'html.parser')
+    def extract_contact_info(self, url):
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            contact_info = []
+            
+            # Extract information from text content
+            for text in soup.stripped_strings:
+                info = self._extract_from_text(text)
+                if info:
+                    contact_info.append(info)
+            
+            # Extract information from specific HTML elements
+            contact_info.extend(self._extract_from_elements(soup, url))
+            
+            return contact_info
+        except requests.RequestException as e:
+            print(f"Error fetching {url}: {str(e)}")
+            return []
+
+    def _extract_from_text(self, text):
+        info = {}
+        
+        # Extract email
+        emails = self.email_pattern.findall(text)
+        if emails:
+            info['email'] = emails[0]
+        
+        # Extract names
+        names = self.name_pattern.findall(text)
+        if names:
+            info['name'] = names[0]
+        
+        # Extract titles
+        for keyword in self.title_keywords:
+            if keyword.lower() in text.lower():
+                info['title'] = text
+                break
+        
+        return info if info else None
+
+    def _extract_from_elements(self, soup, base_url):
         contact_info = []
-
-        # Extract from specific sections (adjust selectors based on target websites)
-        team_section = soup.select_one('div.team-section, section.team, div.about-us')
-        if team_section:
-            for member in team_section.find_all('div', class_='team-member'):
-                info = self.extract_member_info(member, url)
+        
+        # Extract from meta tags
+        for tag in soup.find_all('meta'):
+            name = tag.get('name', '').lower()
+            content = tag.get('content', '')
+            if 'description' in name or 'keywords' in name:
+                info = self._extract_from_text(content)
                 if info:
                     contact_info.append(info)
-
-        # If no team section found, try general extraction
-        if not contact_info:
-            for element in soup.find_all(['div', 'section', 'article']):
-                info = self.extract_member_info(element, url)
+        
+        # Extract from specific elements often used for contact info
+        for elem in soup.find_all(['a', 'p', 'div', 'span']):
+            if 'contact' in elem.get('class', []) or 'contact' in elem.get('id', ''):
+                info = self._extract_from_text(elem.get_text())
                 if info:
                     contact_info.append(info)
-
+            
+            # Extract emails from href attributes
+            href = elem.get('href', '')
+            if href.startswith('mailto:'):
+                contact_info.append({'email': href[7:]})
+            
+            # Extract LinkedIn profiles
+            if 'linkedin.com/in/' in href:
+                contact_info.append({'linkedin': urljoin(base_url, href)})
+        
         return contact_info
 
-    def extract_member_info(self, element, url):
-        name = self.extract_name(element)
-        if not name:
-            return None
-
-        email = self.extract_email(element)
-        title = self.extract_title(element)
-        linkedin = self.extract_linkedin(element)
-
-        if email or title or linkedin:
-            return {
-                'name': name,
-                'email': email or 'not_found',
-                'title': title or 'not_found',
-                'linkedin': linkedin or 'not_found',
-                'src_url': url
-            }
-        return None
-
-    def extract_name(self, element):
-        name_elem = element.find(['h1', 'h2', 'h3', 'h4', 'h5', 'strong'])
-        if name_elem and self.name_pattern.match(name_elem.text.strip()):
-            return name_elem.text.strip()
-        return None
-
-    def extract_email(self, element):
-        email_elem = element.find('a', href=lambda href: href and href.startswith('mailto:'))
-        if email_elem:
-            return email_elem['href'].replace('mailto:', '')
-        
-        text = element.get_text()
-        emails = self.email_pattern.findall(text)
-        return emails[0] if emails else None
-
-    def extract_title(self, element):
-        title_elem = element.find(['p', 'span', 'div'], string=lambda text: text and any(keyword in text.lower() for keyword in self.title_keywords))
-        return title_elem.text.strip() if title_elem else None
-
-    def extract_linkedin(self, element):
-        linkedin_elem = element.find('a', href=lambda href: href and 'linkedin.com' in href)
-        return linkedin_elem['href'] if linkedin_elem else None
+# Usage example
+if __name__ == "__main__":
+    extractor = ContactInfoExtractor()
+    results = extractor.extract_contact_info("https://example.com")
+    print(results)
