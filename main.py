@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from scraper_engine import ScraperEngine
+import asyncio
+from async_engine import AsyncScraper
+from validate_data import DataValidator
 from utils.csv_utils import CSVUtils
 from utils.utils import load_env_variables
 
@@ -26,13 +28,22 @@ class ScraperGUI:
             messagebox.showerror("Error", "Please enter at least one URL.")
             return
 
-        scraper = ScraperEngine()
-        results = scraper.scrape_urls(urls)
+        scraper = AsyncScraper()
+        validator = DataValidator()
+        
+        asyncio.run(self.run_scraper(scraper, validator, urls))
 
-        if results:
+    async def run_scraper(self, scraper, validator, urls):
+        all_results = []
+        for url in urls:
+            results = await scraper.scrape(url)
+            validated_results = [result for result in results if validator.validate_contact_info(result)]
+            all_results.extend(validated_results)
+
+        if all_results:
             filename = filedialog.asksaveasfilename(defaultextension=".csv")
             if filename:
-                CSVUtils.write_to_csv(results, filename)
+                CSVUtils.write_to_csv(all_results, filename)
                 messagebox.showinfo("Success", f"Results saved to {filename}")
             else:
                 messagebox.showwarning("Warning", "No file selected. Results not saved.")
