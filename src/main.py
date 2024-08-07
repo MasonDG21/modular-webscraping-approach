@@ -1,10 +1,10 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 import asyncio
-from async_engine import main as scrape_main
-from validate_data import DataValidator
-from utils.csv_utils import CSVUtils
-from utils.utils import load_env_variables
+from src.scraper.async_engine import main as scrape_main
+from src.validators.validate_data import DataValidator
+from src.utils.csv_utils import CSVUtils
+from src.utils.utils import load_env_variables
 import logging
 
 class ScraperGUI:

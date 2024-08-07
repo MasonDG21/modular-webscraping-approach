@@ -5,7 +5,7 @@ from urllib.parse import urljoin
 from src.utils.logging_utils import setup_logging, get_logger
 
 setup_logging()
-logging = get_logger(__name__)
+logger = get_logger(__name__)
 
 class ContactInfoExtractor:
     def __init__(self):
@@ -61,7 +61,7 @@ class ContactInfoExtractor:
             
             return contact_info
         except Exception as e:
-            self.logger.error(f"Error extracting contact info from {url}: {str(e)}")
+            logger.error(f"Error extracting contact info from {url}: {str(e)}")
             return []
 
     def _extract_from_text(self, text):
@@ -84,7 +84,7 @@ class ContactInfoExtractor:
                     info['title'] = text
                     break
         except Exception as e:
-            self.logger.error(f"Error extracting info from text: {str(e)}")
+            logger.error(f"Error extracting info from text: {str(e)}")
         
         return info if info else None
 
@@ -117,7 +117,7 @@ class ContactInfoExtractor:
                 if 'linkedin.com/in/' in href:
                     contact_info.append({'linkedin': urljoin(base_url, href)})
         except Exception as e:
-            self.logger.error(f"Error extracting info from elements: {str(e)}")
+            logger.error(f"Error extracting info from elements: {str(e)}")
         
         return contact_info
 
