@@ -15,15 +15,57 @@ s.schedule()
 import os
 import subprocess
 import chardet
-from collections import deque
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from .urls import urls_from_html
-from src.utils.logging_utils import setup_logging, get_logger
+import asyncio
+from urllib.parse import urlparse   # urlparse is used to extract domain from URL
+from aiolimiter import AsyncLimiter # aiolimiter is used to rate limit requests
+from collections import deque      # deque is used to store URLs to be downloaded
+from collections import defaultdict # defaultdict is used to store domain limiters
+from concurrent.futures import ProcessPoolExecutor, as_completed # ProcessPoolExecutor is used to parallelize downloads
+from .urls import urls_from_html   # urls_from_html is used to extract URLs from HTML
+from src.utils.logging_utils import get_logger # setup_logging is used to configure logging
+from src.config import config
+from .downloader import download_with_rate_limit
 
-# configure the logging utility
-setup_logging()
 logger = get_logger(__name__)
 
+
+class RateLimitedScheduler:
+    def __init__(self):
+        self.global_limiter = AsyncLimiter(config.GLOBAL_RATE_LIMIT, config.GLOBAL_TIME_PERIOD)
+        self.domain_limiters = defaultdict(
+            lambda: AsyncLimiter(config.DOMAIN_RATE_LIMIT, config.DOMAIN_TIME_PERIOD)
+        )
+        self.queue = asyncio.Queue()
+
+    def extract_domain(self, url):
+        return urlparse(url).netloc
+
+    async def add_url(self, url):
+        await self.queue.put(url)
+
+    async def get_url(self):
+        url = await self.queue.get()
+        domain = self.extract_domain(url)
+        try:
+            async with self.global_limiter:
+                async with self.domain_limiters[domain]:
+                    logger.debug(f"Rate limit check passed for URL: {url}")
+                    return url
+        except asyncio.TimeoutError:
+            logger.warning(f"Rate limit exceeded for domain: {domain}. Requeueing URL: {url}")
+            await self.add_url(url)  # Requeue the URL
+            return None
+        
+    # asynchronous generator that yields rate-limited URLs.
+    async def schedule(self):
+        while True:
+            url = await self.get_url()
+            if url:
+                yield url
+            else:
+                await asyncio.sleep(1)  # Wait before trying again
+
+# Download Scheduler uses RateLimitedScheduler to download Web pages
 class DownloadScheduler:
     def __init__(self, callback, initial=None, processes=5, url_filter=None):
         """ DownloadScheduler downloads Web pages at certain URLs
@@ -40,6 +82,8 @@ class DownloadScheduler:
         self.processes = processes
         self.url_filter = url_filter
         self.logger.debug(f"DownloadScheduler initialized with {len(self.queue)} initial URLs")
+        self.rate_limiter = RateLimitedScheduler()
+
 
     def download_complete(self, future, url):
         """ Callback when a download completes
@@ -57,67 +101,44 @@ class DownloadScheduler:
             self.queue.extendleft(urls)
             self.callback(url.url, html)
 
+
+    async def rate_limited_download(self, url):
+        await self.rate_limiter.add_url(url)
+        rate_limited_url = await self.rate_limiter.get_url()
+        if rate_limited_url:
+            return await download_with_rate_limit(rate_limited_url, self.rate_limiter)
+        return None
+
+
     def schedule(self):
-        """ Begins downloading the Web pages in the queue.
-        Calls `download_complete()` when a download finishes.
-        """
         self.logger.info("Starting the scheduler")
+        
+        # Add initial URLs to the rate limiter.
+        for url in self.queue:
+            asyncio.get_event_loop().run_until_complete(self.rate_limiter.add_url(url))
+        self.queue.clear()
+        
         with ProcessPoolExecutor(max_workers=self.processes) as executor:
-            while self.queue:
-                urls = pop_chunk(self.processes, self.queue.pop)
-                self.visited |= set(urls)
-                future_to_url = {executor.submit(download, url): url for url in urls}
-                for f in as_completed(future_to_url, timeout=15):
-                    self.download_complete(f, future_to_url[f])
+            while True:
+                urls = []
+                for _ in range(self.processes):
+                    url = asyncio.get_event_loop().run_until_complete(self.rate_limiter.get_url())
+                    if url and url not in self.visited:
+                        urls.append(url)
+                        self.visited.add(url)
+                        
+                if not urls:
+                    if self.queue:
+                        continue # Try again if there are more URLs in the queue
+                    else:
+                        break # Exit if there are no more URLs
+                
+                loop = asyncio.get_event_loop()
+                future_to_url = {
+                    executor.submit(lambda u: loop.run_until_complete(self.rate_limited_download(u)), url): url 
+                    for url in urls
+                }
+                for future in as_completed(future_to_url):
+                    self.download_complete(future, future_to_url[future])
+        
         self.logger.info("Scheduler finished")
-
-def pop_chunk(n, fn):
-    """ Calls fn() n-times, putting the return value in a list
-    Args:
-        n (int): maximum size of the chunk
-        fn (func): function to call (probably some collection instance's pop() function)
-    Returns:
-        ([]) list of whatever items that were in 
-    Example:
-        >>> foo = [1, 2, 3, 4, 5]
-        >>> pop_chunk(3, foo.pop)
-        [5, 4, 3]
-        >>> foo
-        [1, 2]
-    """
-    return_values = []
-    for _ in range(n):
-        try:
-            return_values.append(fn())
-        except IndexError:
-            break
-    return return_values
-
-def download(url):
-    """ Uses 'downloader.py' to download a Web page's HTML content.
-    Args:
-        url (Url): The URL whose HTML we want to download/fetch
-    Returns:
-        (str) A string of the HTML content found at the given URL
-    Note:
-        This method is parallelized
-    """
-    logger = get_logger('DownloadScheduler.download')
-    logger.debug(f"Starting download for URL: {url.url}")
-    abs_path = os.path.dirname(os.path.abspath(__file__))
-    script_path = os.path.join(abs_path, 'downloader.py')
-    args = ['python', script_path, url.url]
-    try:
-        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = proc.communicate()
-        if proc.returncode != 0:
-            logger.error(f"Error downloading {url.url}: {stderr.decode('utf-8')}")
-            return ""
-        detected_encoding = chardet.detect(stdout)['encoding']
-        logger.debug(f"Detected encoding for {url.url}: {detected_encoding}")
-        html = stdout.decode(detected_encoding)
-        logger.debug(f"Downloaded content length for {url.url}: {len(html)}")
-        return html
-    except Exception as e:
-        logger.error(f"Exception during download of {url.url}: {e}", exc_info=True)
-        return ""
