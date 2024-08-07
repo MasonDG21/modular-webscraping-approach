@@ -2,7 +2,7 @@ from src.utils.logging_utils import get_logger
 from contact_info import ContactInfoExtractor
 from scraper.scheduler import DownloadScheduler
 from scraper.urls import Url
-from wrapper import Wrapper
+from src.scraper.wrapper import Wrapper
 
 class ScraperEngine:
     def __init__(self, use_auto_scraper=False):
