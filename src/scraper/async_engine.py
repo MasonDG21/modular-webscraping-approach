@@ -1,12 +1,14 @@
 import asyncio
-import aiohttp
-from urllib.parse import urljoin, urlparse
-from bs4 import BeautifulSoup
-from contact_info import ContactInfoExtractor
 import argparse
 import json
-from src.utils.logging_utils import setup_logging, get_logger
 import socket
+from urllib.parse import urljoin, urlparse
+
+import aiohttp
+from bs4 import BeautifulSoup
+
+from src.scraper.contact_info import ContactInfoExtractor
+from src.utils.logging_utils import setup_logging, get_logger
 
 setup_logging()
 logger = get_logger(__name__)

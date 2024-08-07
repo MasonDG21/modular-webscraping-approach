@@ -1,15 +1,15 @@
 import argparse
-import os
 import asyncio
+import os
 from sys import platform
 
+from aiolimiter import AsyncLimiter
 from PyQt5.QtCore import QUrl
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtWebEngineWidgets import QWebEnginePage
 
-from src.utils.logging_utils import setup_logging, get_logger
 from src.config import config
-from aiolimiter import AsyncLimiter
+from src.utils.logging_utils import setup_logging, get_logger
 
 # configure the logging utility
 setup_logging()

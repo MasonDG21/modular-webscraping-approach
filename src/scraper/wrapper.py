@@ -1,6 +1,7 @@
-from bs4 import BeautifulSoup
 import re
 from collections import defaultdict
+
+from bs4 import BeautifulSoup
 
 class Wrapper:
     def __init__(self):
@@ -113,7 +114,7 @@ class Wrapper:
 
 # Usage
 if __name__ == "__main__":
-    wrapper = FlexibleAutoScraperWrapper()
+    wrapper = Wrapper()
     sample_html = """
     <html>
         <body>

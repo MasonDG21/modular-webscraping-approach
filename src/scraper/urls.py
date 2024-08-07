@@ -4,6 +4,7 @@ Utilities to handle and deal with URLs.
 
 import re
 from urllib.parse import urljoin, urlparse
+
 from src.utils.logging_utils import setup_logging, get_logger
 
 # configure the logging utility

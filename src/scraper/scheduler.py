@@ -12,19 +12,20 @@ s = DownloadScheduler(callback, initial=['https://www.google.com/search?q=shark+
 s.schedule()
 ```
 """
+import asyncio
 import os
 import subprocess
+from collections import deque, defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from urllib.parse import urlparse
+
 import chardet
-import asyncio
-from urllib.parse import urlparse   # urlparse is used to extract domain from URL
-from aiolimiter import AsyncLimiter # aiolimiter is used to rate limit requests
-from collections import deque      # deque is used to store URLs to be downloaded
-from collections import defaultdict # defaultdict is used to store domain limiters
-from concurrent.futures import ProcessPoolExecutor, as_completed # ProcessPoolExecutor is used to parallelize downloads
-from .urls import urls_from_html   # urls_from_html is used to extract URLs from HTML
-from src.utils.logging_utils import get_logger # setup_logging is used to configure logging
+from aiolimiter import AsyncLimiter
+
 from src.config import config
-from .downloader import download_with_rate_limit
+from src.scraper.urls import urls_from_html
+from src.scraper.downloader import download_with_rate_limit
+from src.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 

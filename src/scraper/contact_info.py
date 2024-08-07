@@ -1,7 +1,9 @@
 import re
-from bs4 import BeautifulSoup
-import requests
 from urllib.parse import urljoin
+
+import requests
+from bs4 import BeautifulSoup
+
 from src.utils.logging_utils import setup_logging, get_logger
 
 setup_logging()

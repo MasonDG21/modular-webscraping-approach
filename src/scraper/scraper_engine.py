@@ -1,8 +1,8 @@
-from src.utils.logging_utils import get_logger
-from contact_info import ContactInfoExtractor
-from scraper.scheduler import DownloadScheduler
-from scraper.urls import Url
+from src.scraper.contact_info import ContactInfoExtractor
+from src.scraper.scheduler import DownloadScheduler
+from src.scraper.urls import Url
 from src.scraper.wrapper import Wrapper
+from src.utils.logging_utils import get_logger
 
 class ScraperEngine:
     def __init__(self, use_auto_scraper=False):
