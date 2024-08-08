@@ -12,46 +12,80 @@ setup_logging()
 logger = get_logger(__name__)
 
 class BaseExtractor(ABC):
+    def __init__(self):
+        self.logger = get_logger(self.__class__.__name__)
+
     @abstractmethod
     def extract(self, content):
         pass
 
+    def clean_text(self, text):
+        """Remove extra whitespace and normalize text."""
+        return ' '.join(text.split())
+
+    def find_all_matches(self, pattern, text):
+        """Find all matches of a regex pattern in the text."""
+        return re.findall(pattern, text)
+
+    def log_extraction(self, content_type, results):
+        """Log the results of an extraction."""
+        self.logger.info(f"Extracted {len(results)} {content_type}(s)")
+        for result in results:
+            self.logger.debug(f"Extracted {content_type}: {result['value']}")
+
+    def safe_extract(self, content):
+        """Safely perform extraction with error handling."""
+        try:
+            results = self.extract(content)
+            self.log_extraction(self.__class__.__name__.replace('Extractor', '').lower(), results)
+            return results
+        except Exception as e:
+            self.logger.error(f"Error during extraction: {str(e)}")
+            return []
+
 class EmailExtractor(BaseExtractor):
     def __init__(self):
-        self.email_pattern = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
+        super().__init__()
+        self.email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
 
     def extract(self, content):
-        return [{'type': 'email', 'value': email} for email in self.email_pattern.findall(content)]
+        cleaned_content = self.clean_text(content)
+        emails = self.find_all_matches(self.email_pattern, cleaned_content)
+        return [{'type': 'email', 'value': email} for email in emails]
 
 class FullNameExtractor(BaseExtractor):
     def __init__(self):
         self.name_pattern = re.compile(r'\b(?!(?:Email|Contact|sent by)\b)(?:Dr\.|Mr\.|Ms\.|Mrs\.|Prof\.)?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b')
-
+        super().__init__()  # Ensure BaseExtractor's constructor is called
+        
     def extract(self, content):
         matches = self.name_pattern.findall(content)
         return [{'type': 'name', 'value': name.strip()} for name in matches]
 
 class PhoneExtractor(BaseExtractor):
     def __init__(self):
-        self.phone_pattern = re.compile(r'\+?[\d\s.-]+\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}')
+        super().__init__()
+        self.phone_pattern = r'\+?[\d\s.-]+\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}'
 
     def extract(self, content):
-        return [{'type': 'phone', 'value': phone.strip()} for phone in self.phone_pattern.findall(content)]
+        cleaned_content = self.clean_text(content)
+        phone_numbers = self.find_all_matches(self.phone_pattern, cleaned_content)
+        return [{'type': 'phone', 'value': phone.strip()} for phone in phone_numbers]
 
 class TitleExtractor(BaseExtractor):
     def __init__(self):
+        super().__init__()
         self.title_keywords = [
             'CEO', 'CTO', 'CFO', 'COO', 'President', 'Vice President', 'Director',
             'Manager', 'Engineer', 'Developer', 'Designer', 'Analyst', 'Specialist',
             # ... (rest of the keywords)
         ]
+        self.title_pattern = r'\b(' + '|'.join(self.title_keywords) + r')\b'
 
     def extract(self, content):
-        titles = []
-        for keyword in self.title_keywords:
-            if keyword.lower() in content.lower():
-                titles.append({'type': 'title', 'value': keyword})
-        return titles
+        cleaned_content = self.clean_text(content)
+        matches = self.find_all_matches(self.title_pattern, cleaned_content)
+        return [{'type': 'title', 'value': title} for title in matches]
 
 class HTMLParser:
     def parse(self, html):
