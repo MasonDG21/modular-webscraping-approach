@@ -7,7 +7,7 @@ from urllib.parse import urljoin, urlparse
 import aiohttp
 from bs4 import BeautifulSoup
 
-from src.scraper.contact_info import ContactInfoExtractor
+from src.scraper.extractors import ContactInfoExtractor
 from src.utils.logging_utils import setup_logging, get_logger
 
 setup_logging()

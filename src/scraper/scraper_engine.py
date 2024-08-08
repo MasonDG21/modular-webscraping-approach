@@ -1,4 +1,4 @@
-from src.scraper.contact_info import ContactInfoExtractor
+from src.scraper.extractors import ContactInfoExtractor
 from src.scraper.scheduler import DownloadScheduler
 from src.scraper.urls import Url
 from src.scraper.wrapper import Wrapper

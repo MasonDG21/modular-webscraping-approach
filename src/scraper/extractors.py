@@ -132,9 +132,20 @@ class TitleExtractor(BaseExtractor):
 
 
 class ContextualExtractor(BaseExtractor):
-    def __init__(self, extractor_registry):
+    """Extracts contextual information from HTML content.
+    Attributes:
+        registry (object): The registry object used to retrieve other extractors.
+        context_keywords (dict): A dictionary containing contextual keywords categorized by weight.
+    Methods:
+        `extract(content)`: Extracts contextual information from the given HTML content.
+        `find_contextual_elements(soup)`: Finds contextual elements in a BeautifulSoup object.
+        `extract_from_element(element, context_weight)`: Extracts infor from a given element.
+        `calculate_confidence(item, context_weight)`: Calculates confidence for extracted items.
+        `extract_structured_data(soup)`: Extracts structured data from the BeautifulSoup object.
+        """
+    def __init__(self, registry):
         super().__init__()
-        self.extractor_registry = extractor_registry
+        self.registry = registry
         self.context_keywords = {
             'high': ['about', 'team', 'contact', 'leadership', 'management', 'staff', 'employees', 'board', 'executives'],
             'medium': ['directory', 'people', 'department', 'faculty', 'personnel', 'crew', 'members'],
@@ -179,7 +190,7 @@ class ContextualExtractor(BaseExtractor):
         
         # Use other extractors
         for extractor_name in ['email', 'name', 'phone', 'title']:
-            extractor = self.extractor_registry.get_extractor(extractor_name)
+            extractor = self.registry.get_extractor(extractor_name)
             if extractor:
                 extracted = extractor.extract(text)
                 for item in extracted:
@@ -257,8 +268,19 @@ class HTMLParser:
 
 
 class ResultAggregator:
+    """A class that:
+    1. Takes a list of results.
+    2. Aggregates them based on type & value.
+    
+    Methods:
+        aggregate: Aggregates the given list of results.
+    """
     def aggregate(self, results):
+        
+        # Initialize an empty dictionary `aggregated` to store the final results
         aggregated = {}
+        
+        # Iterate over each result in the given list of results
         for result in results:
             if result['type'] not in aggregated:
                 aggregated[result['type']] = {}
@@ -270,14 +292,18 @@ class ResultAggregator:
         
         return [{'type': k, 'value': v, 'confidence': conf} for k, values in aggregated.items() for v, conf in values.items()]
 
-class ExtractorRegistry:
+
+class Registry:
     def __init__(self):
         self.extractors = {}
-
-    def register(self, name, extractor_class):
-        if not issubclass(extractor_class, BaseExtractor):
+        
+    def register(self, name, extractor):
+        if isinstance(extractor, type) and issubclass(extractor, BaseExtractor):
+            self.extractors[name] = extractor()
+        elif isinstance(extractor, BaseExtractor):
+            self.extractors[name] = extractor
+        else:
             raise ValueError("Extractor must inherit from BaseExtractor")
-        self.extractors[name] = extractor_class()
 
     def get_extractor(self, name):
         return self.extractors.get(name)
@@ -288,7 +314,7 @@ class ExtractorRegistry:
 
 class ContactInfoExtractor:
     def __init__(self):
-        self.registry = ExtractorRegistry()
+        self.registry = Registry()
         self.registry.register('email', EmailExtractor)
         self.registry.register('name', FullNameExtractor)
         self.registry.register('phone', PhoneExtractor)
