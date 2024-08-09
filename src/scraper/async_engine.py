@@ -51,6 +51,10 @@ class AsyncScraper:
                 self.seen_urls.add(url)
                 html = await self.fetch_html(session, url)
                 if html:
+                    # make sure html is a string before passing it to extract_contact_info
+                    if isinstance(html, list):
+                        self.logger.info(f"HTML received by `scrape` was type: `list` for URL: {url}")
+                        html = ' '.join(map(str, html))
                     page_results = self.extractor.extract_contact_info(url, html)
                     results.extend(page_results)
 
@@ -74,6 +78,9 @@ class AsyncScraper:
                 async with session.get(url, timeout=30) as response:
                     if response.status == 200:
                         html = await response.text()
+                        if isinstance(html, list):
+                            self.logger.info(f"HTML received by `fetch_html` is type: `list` for URL: {url}")
+                            html = ' '.join(map(str, html))
                         self.logger.info(f"Successfully scraped {url}")
                         return html
                     else:
