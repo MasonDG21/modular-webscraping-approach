@@ -14,6 +14,8 @@ from src.utils.logging_utils import setup_logging, get_logger
 setup_logging()
 logger = get_logger(__name__)
 
+MIN_QUERY_LENGTH = 3
+
 class BaseExtractor(ABC):
     def __init__(self):
         self.logger = get_logger(self.__class__.__name__)
@@ -25,13 +27,21 @@ class BaseExtractor(ABC):
     def clean_text(self, text):
         """Remove extra whitespace and normalize text."""
         cleaned = re.sub(r'\s+', ' ', text).strip()
-        self.logger.debug(f"Cleaned text. Original length: {len(text)}, Cleaned length: {len(cleaned)}")
+        
+        if not cleaned:
+            self.logger.warning(f"Cleaning resulted in empty string. Reverted to original: '{text}'")
+            return text  # Return original text if cleaning results in empty string
+        
+        self.logger.debug(f"Cleaned text. Original length: {len(text)}, Clean length: {len(cleaned)} | Clean Text: {cleaned}")
         return cleaned
     
     def find_all_matches(self, pattern, text):
         """Find all matches of a regex pattern in the text."""
+        if not text:
+            self.logger.warning("Text for find_all_matches is empty. No matches found.")
+            return []
         matches = re.findall(pattern, text)
-        self.logger.debug(f"Found {len(matches)} matches for pattern: {pattern}")
+        self.logger.debug(f"Found {len(matches)} matches for pattern in text: {text}")
         return matches
 
     def log_extraction(self, content_type, results):
@@ -42,6 +52,9 @@ class BaseExtractor(ABC):
 
     def safe_extract(self, content):
         """Safely perform extraction with error handling."""
+        if not content or len(content) < MIN_QUERY_LENGTH:
+            self.logger.warning(f"Content too short for extraction: {content}")
+            return []
         try:
             results = self.extract(content)
             self.log_extraction(self.__class__.__name__.replace('Extractor', '').lower(), results)
@@ -115,35 +128,92 @@ class TitleExtractor(BaseExtractor):
     def __init__(self):
         super().__init__()
         self.title_keywords = [
-            'CEO', 'CTO', 'CFO', 'COO', 'President', 'Vice President', 'Director',
-            'Manager', 'Engineer', 'Developer', 'Designer', 'Analyst', 'Specialist',
-            'Coordinator', 'Administrator', 'Supervisor', 'Lead', 'Head', 'Chief',
-            'Technician', 'Scientist', 'Pilot', 'Inspector', 'Consultant', 'Architect',
-            'Operator', 'Instructor', 'Planner', 'Strategist', 'Estimator', 'Fabricator',
-            'Assembler', 'Machinist', 'Welder', 'Mechanic', 'Tester', 'Trainer',
-            'Project Manager', 'Program Manager', 'Systems Engineer', 'Avionics Engineer',
-            'Test Engineer', 'Flight Engineer', 'Manufacturing Engineer', 'Quality Engineer',
-            'Structural Engineer', 'Aerospace Engineer', 'Electrical Engineer', 'Software Engineer',
-            'Mechanical Engineer', 'Materials Engineer', 'Safety Engineer', 'Reliability Engineer',
-            'Design Engineer', 'Research Scientist', 'Principal Investigator', 'Field Service Engineer',
-            'Compliance Manager', 'Logistics Manager', 'Supply Chain Manager', 'Production Manager',
-            'Operations Manager', 'Business Development Manager', 'Customer Service Manager',
-            'Integration Engineer', 'Mission Manager', 'Payload Specialist', 'Propulsion Engineer',
-            'Satellite Engineer', 'Thermal Engineer', 'Dynamics Engineer', 'RF Engineer',
-            'Guidance, Navigation, and Control (GNC) Engineer', 'Ordnance Engineer', 'Launch Director',
-            'Ground Systems Engineer', 'Mission Operations Engineer', 'Systems Architect',
-            'Configuration Manager', 'Risk Manager', 'Test Technician', 'Calibration Technician',
-            'Electronics Technician', 'Maintenance Technician', 'Program Analyst', 'Budget Analyst',
-            'Contract Administrator', 'Procurement Specialist', 'Inventory Manager', 'Supply Chain Analyst',
-            'IT Manager', 'Cybersecurity Specialist', 'Data Scientist', 'AI Specialist', 'Robotics Engineer',
-            'Control Systems Engineer', 'Optical Engineer', 'Spacecraft Operations Specialist',
-            'Business Analyst', 'Marketing Manager', 'Sales Manager', 'Communications Manager',
-            'Human Resources Manager', 'Talent Acquisition Specialist', 'Training Coordinator',
-            'Safety Manager', 'Environmental Engineer', 'Sustainability Manager', 'Innovation Manager',
-            'Customer Support Engineer', 'Technical Support Specialist', 'Field Operations Manager',
-            'Quality Assurance Manager', 'Regulatory Affairs Manager', 'Patent Agent', 'Legal Counsel'
+            'CEO', 'CTO', 'CFO', 'COO', 'President', 'Director', 'Chief', 'Strategist', 'Logistics',
+            'Manager', 'Engineer', 'Developer', 'Designer', 'Analyst', 'Specialist', 'Supply Chain',
+            'Coordinator', 'Administrator', 'Supervisor', 'Lead', 'Head', 'VP', 'Production',
+            'Pilot', 'Technician', 'Scientist', 'Inspector', 'Consultant', 'Architect', 'Assistant',
+            'Associate', 'Operator', 'Instructor', 'Planner', 'Estimator', 'Fabricator',
+            'Assembler', 'Machinist', 'Welder', 'Mechanic', 'Tester', 'Trainer', 'Project',
+            'Marketing', 'Systems', 'Avionics', 'Researcher', 'Flight', 'Manufacturing',
+            'Investigator', 'Quality', 'Assurance', 'Service', 'Support', 'Relations', 'Compliance',
+            'Electrical', 'IT', 'Structural', 'Mechanical', 'Aerospace', 'Business', 'Sales', 'HR',
+            'Recruiter', 'Recruitment', 'Materials', 'Safety', 'Reliability', 'Research',
+            'Field Service', 'Cybersecurity', 'Ordnance', 'Legal Counsel', 'Maintenance',
+            'Agent', 'Human Resources', 'Procurement', 'Operations', 'Business Development',
+            'Integration', 'Mission', 'Payload', 'Propulsion', 'Dr.', 'Regulatory Affairs',
+            'Internal Affairs', 'External Affairs', 'Public Relations', 'Acquisition', 'Configuration',
+            'Risk', 'Test', 'Calibration', 'Inventory', 'Contractor', 'Talent', 'Training', 'Officer',
+            'Compliance Officer', 'Legal Advisor', 'Technical Lead', 'Data Scientist', 'Data Engineer',
+            'Product Manager', 'Product Owner', 'Program Manager', 'Scrum Master', 'Product Designer',
+            'User Experience', 'UX', 'UI', 'Security', 'Infrastructure', 'DevOps', 'Cloud', 'AI',
+            'Machine Learning', 'Artificial Intelligence', 'Big Data', 'Data Analyst', 'Data Architect',
+            'Solutions Architect', 'Enterprise Architect', 'Chief Information Officer', 'CIO',
+            'Chief Security Officer', 'CSO', 'Chief Data Officer', 'CDO', 'Chief Technology Officer', 
+            'Chief Marketing Officer', 'CMO', 'Chief Operations Officer', 'Chief Revenue Officer', 'CRO',
+            'Chief Financial Officer', 'Financial Analyst', 'Investment Analyst', 'Portfolio Manager', 
+            'Account Manager', 'Account Executive', 'Sales Executive', 'Sales Manager', 'Sales Director', 
+            'Customer Success', 'Customer Support', 'Client Services', 'Partner Manager', 'Channel Manager', 
+            'Vendor Manager', 'Supplier Manager', 'Procurement Specialist', 'Logistics Coordinator', 'Logistics Manager', 
+            'Supply Chain Manager', 'Supply Chain Analyst', 'Material Planner', 'Material Manager', 'Material Coordinator', 
+            'Warehouse Manager', 'Warehouse Supervisor', 'Operations Manager', 'Operations Coordinator', 
+            'Operations Analyst', 'Operations Director', 'Human Resources Manager', 'HR Coordinator', 'HR Analyst', 
+            'Talent Acquisition', 'Learning and Development', 'L&D', 'Employee Relations', 'Compensation and Benefits', 
+            'Payroll Specialist', 'Payroll Manager', 'Risk Management', 'Compliance Manager', 'Internal Auditor', 
+            'External Auditor', 'Financial Controller', 'Finance Director', 'Finance Manager', 'Budget Analyst', 
+            'Financial Planner', 'Business Analyst', 'Business Intelligence', 'BI', 'BI Analyst', 'IT Manager', 
+            'IT Director', 'Chief Digital Officer', 'Digital Transformation', 'Digital Marketing', 'SEO', 'SEM', 
+            'Content Manager', 'Content Strategist', 'Content Creator', 'Social Media Manager', 'Social Media Strategist', 
+            'Creative Director', 'Art Director', 'Copywriter', 'Content Writer', 'Editor', 'Proofreader', 'Technical Writer',
+            'Software Engineer', 'Software Developer', 'Frontend Developer', 'Backend Developer', 'Full Stack Developer', 
+            'Mobile Developer', 'iOS Developer', 'Android Developer', 'Web Developer', 'Game Developer', 
+            'Embedded Systems Engineer', 'Hardware Engineer', 'Firmware Engineer', 'Network Engineer', 
+            'Systems Administrator', 'IT Support', 'Help Desk', 'Technical Support', 'Customer Support Engineer', 
+            'Service Desk', 'Field Technician', 'Site Reliability Engineer', 'Security Analyst', 'Security Engineer', 
+            'Penetration Tester', 'Ethical Hacker', 'Security Consultant', 'Security Architect', 'Compliance Analyst', 
+            'Regulatory Compliance', 'Data Protection Officer', 'DPO', 'General Counsel', 'Paralegal', 'Legal Assistant', 
+            'Litigation Support', 'Contract Manager', 'Contract Administrator', 'Patent Agent', 'Patent Attorney', 
+            'Trademark Attorney', 'Real Estate Manager', 'Property Manager', 'Facility Manager', 'Maintenance Technician', 
+            'Maintenance Manager', 'Facilities Coordinator', 'Building Services', 'Environmental Health and Safety', 
+            'EHS', 'Safety Officer', 'Safety Manager', 'HSE', 'Health and Safety', 'Construction Manager', 
+            'Construction Engineer', 'Site Manager', 'Site Engineer', 'Project Coordinator', 'Project Manager', 
+            'Senior Project Manager', 'Program Director', 'PMO', 'Change Manager', 'Organizational Change', 
+            'Transformation Manager', 'Business Transformation', 'Business Process Analyst', 'Process Engineer', 
+            'Continuous Improvement', 'Lean Manufacturing', 'Six Sigma', 'Agile Coach', 'Product Director', 'R&D', 
+            'Research and Development', 'Innovation Manager', 'Innovation Director', 'Principal Engineer', 
+            'Senior Engineer', 'Lead Engineer', 'Field Engineer', 'Field Service Engineer', 'Applications Engineer', 
+            'Application Support', 'Technical Account Manager', 'TAM', 'Customer Engineer', 'Customer Success Manager', 
+            'Customer Experience', 'CX', 'Client Relations', 'Client Success', 'Business Development Manager', 
+            'BDM', 'Sales Engineer', 'Pre-Sales', 'Post-Sales', 'Technical Sales', 'Solution Engineer', 
+            'Solution Architect', 'Solution Consultant', 'Implementation Specialist', 'Implementation Manager', 
+            'Customer Implementation', 'Customer Onboarding', 'Customer Training', 'Training Manager', 'L&D Manager', 
+            'Learning Specialist', 'Talent Development', 'Employee Development', 'Organizational Development', 'OD', 
+            'HR Business Partner', 'HR Generalist', 'HR Specialist', 'HR Advisor', 'HR Consultant', 'HR Director', 
+            'Chief People Officer', 'CPO', 'People Operations', 'People Manager', 'People Director', 'Talent Manager', 
+            'Recruitment Manager', 'Recruitment Consultant', 'Headhunter', 'Executive Search', 'Talent Scout', 
+            'Recruitment Specialist', 'Resourcing', 'Staffing', 'Workforce Planning', 'Workforce Manager', 'HRIS', 
+            'HR Information Systems', 'HR Systems', 'HR Technology', 'Compensation Analyst', 'Benefits Manager', 
+            'Reward Analyst', 'Reward Manager', 'Benefits Analyst', 'Employee Benefits', 'Labor Relations', 
+            'Industrial Relations', 'Union Representative', 'Employee Engagement', 'Employee Experience', 
+            'Wellness Manager', 'Wellbeing Manager', 'Corporate Social Responsibility', 'CSR', 'Diversity and Inclusion', 
+            'D&I', 'Diversity Officer', 'Inclusion Officer', 'Ethics Officer', 'Code of Conduct', 'Governance', 
+            'Board Director', 'Board Member', 'Non-Executive Director', 'Trustee', 'Chairperson', 'Vice Chairperson', 
+            'Board Secretary', 'Audit Committee', 'Remuneration Committee', 'Nomination Committee', 'Risk Committee', 
+            'Governance Committee', 'Advisory Board', 'Technical Advisor', 'Industry Expert', 'Consulting Engineer', 
+            'Senior Consultant', 'Management Consultant', 'Strategy Consultant', 'Advisory Consultant', 
+            'Business Consultant', 'Financial Consultant', 'IT Consultant', 'Technology Consultant', 'Systems Consultant', 
+            'Engineering Consultant', 'Project Consultant', 'Sales Consultant', 'Marketing Consultant', 'Training Consultant',
+            'Learning Consultant', 'Development Consultant', 'Organizational Consultant', 'Operations Consultant', 'Process Consultant',
+            'Change Consultant', 'Transformation Consultant', 'Lean Consultant', 'Six Sigma Consultant', 'Agile Consultant',
+            'Scrum Consultant', 'Product Consultant', 'Program Consultant', 'Innovation Consultant', 'Research Consultant', 
+            'Data Consultant', 'Compliance Consultant', 'Regulatory Consultant', 'Legal Consultant', 'Contracts Manager',
+            'Contracts Specialist', 'Bid Manager', 'Proposal Manager', 'Procurement Officer', 'Procurement Manager',
+            'Purchasing Manager', 'Supply Chain Director', 'Logistics Director', 'Inventory Manager', 'Stock Manager',
+            'Materials Manager', 'Demand Planner', 'Demand Manager', 'Factory Manager', 'Manufacturing Manager',
+            'Production Manager', 'Production Supervisor', 'Production Coordinator', 'Maintenance Supervisor',
+            'Maintenance Engineer', 'Reliability Engineer', 'Asset Manager', 'Asset Engineer', 'Plant Manager',
+            'Facilities Manager'
         ]
-        self.title_pattern = r'\b(' + '|'.join(self.title_keywords) + r')\b'
+        self.title_pattern = re.compile(r'\b(' + '|'.join(self.title_keywords) + r')\b', re.IGNORECASE)
 
     def extract(self, content):
         self.logger.debug(f"Extracting Titles from content (length: {len(content)})")
@@ -168,10 +238,15 @@ class TitleExtractor(BaseExtractor):
     def fuzzy_match_titles(self, text):
         self.logger.info("Fuzzy matching titles.")
         words = text.split()
-        potential_titles = [' '.join(words[i:i+3]) for i in range(len(words) - 2)]
+        
+        # Dynamically generate potential titles by combining 3 words at a time
+        potential_titles = []
+        for n in range(2, 5):
+            potential_titles = [' '.join(words[i:i+3]) for i in range(len(words) - n + 1)]
+            
         matches = process.extract(' '.join(potential_titles), self.title_keywords, limit=5)
         self.logger.info(f"Found {len(matches)} fuzzy matches.")
-        return [(match[0], match[1]) for match in matches if match[1] > 80]
+        return [(match[0], match[1]) for match in matches if match[1] > 30]
 
 
 class ContextualExtractor(BaseExtractor):
@@ -191,8 +266,8 @@ class ContextualExtractor(BaseExtractor):
         self.registry = registry
         self.context_keywords = {
             'high': ['about', 'team', 'contact', 'leadership', 'management', 'staff', 'employees', 'board', 'executives'],
-            'medium': ['directory', 'people', 'department', 'faculty', 'personnel', 'crew', 'members'],
-            'low': ['company', 'organization', 'group', 'division', 'unit']
+            'medium': ['directory', 'people', 'department', 'faculty', 'personnel', 'crew', 'members', 'positions', 'roles'],
+            'low': ['company', 'organization', 'group', 'division', 'unit', 'leaders', 'managers']
         }
 
     def extract(self, content):
@@ -383,7 +458,6 @@ class ContactInfoExtractor:
         self.logger = get_logger(self.__class__.__name__)
 
     def extract_contact_info(self, url, html):
-        # status object for debugging
         status = {
             'url': url,
             'status': 'success',
@@ -393,14 +467,15 @@ class ContactInfoExtractor:
         }
         
         try:
-            # Ensure the HTML content is always a string
             if not isinstance(html, str):
                 self.logger.debug(f"HTML content received was not a string (type: {type(html)}). Converting to string.")
-                if isinstance(html, list):
-                    html = ' '.join(map(str, html))  # Convert list elements to strings and join
-                else:
-                    html = str(html)  # Convert other types to string
+                html = self.convert_to_string(html)
             
+            if not html:
+                self.logger.warning(f"Empty HTML content for URL: {url}")
+                status['warnings'].append("Empty HTML content")
+                return status
+
             parsed_content = self.html_parser.parse(html)
             self.logger.debug(f"Parsed content:\n {parsed_content}\n\n")
             results = []
@@ -421,22 +496,7 @@ class ContactInfoExtractor:
                 self.logger.debug(f"Extracting with {extractor_name} from URL: {url}")
                 
                 try:
-                    # Handle text content
-                    text_content = ' '.join(parsed_content['text']) if isinstance(parsed_content['text'], list) else str(parsed_content['text'])
-                    results.extend(extractor.safe_extract(text_content))
-                    
-                    # Handle meta content
-                    meta_content = ' '.join(parsed_content['meta']) if isinstance(parsed_content['meta'], list) else str(parsed_content['meta'])
-                    results.extend(extractor.safe_extract(meta_content))
-                    
-                    # Handle links content
-                    for link in parsed_content['links']:
-                        link_text = link['text'] if isinstance(link['text'], str) else ' '.join(map(str, link['text']))
-                        results.extend(extractor.safe_extract(link_text))
-                        
-                        if extractor_name == 'email' and link['href'].startswith('mailto:'):
-                            results.append({'type': 'email', 'value': link['href'][7:], 'confidence': 1.0})
-                    
+                    results.extend(self.extract_from_parsed_content(extractor, parsed_content))
                 except Exception as e:
                     status['warnings'].append(f"{extractor_name.capitalize()} extraction failed: {str(e)}")
                     self.logger.warning(f"{extractor_name.capitalize()} extraction failed for {url}: {str(e)}", exc_info=True)
@@ -448,10 +508,38 @@ class ContactInfoExtractor:
             return status
 
         except Exception as e:
-            status['success'] = False
+            status['status'] = 'failure'
             status['errors'].append(str(e))
             self.logger.error(f"Error extracting contact info from {url}: {str(e)}", exc_info=True)
             return status
+    
+    def convert_to_string(self, content):
+        if isinstance(content, list):
+            return ' '.join(map(str, content))
+        return str(content)
+
+        
+    def extract_from_parsed_content(self, extractor, parsed_content):
+        results = []
+        
+        # Handle text content
+        text_content = self.convert_to_string(parsed_content['text'])
+        results.extend(extractor.safe_extract(text_content))
+        
+        # Handle meta content
+        meta_content = self.convert_to_string(parsed_content['meta'])
+        results.extend(extractor.safe_extract(meta_content))
+        
+        # Handle links content
+        for link in parsed_content['links']:
+            link_text = self.convert_to_string(link['text'])
+            results.extend(extractor.safe_extract(link_text))
+            
+            if isinstance(extractor, EmailExtractor) and link['href'].startswith('mailto:'):
+                results.append({'type': 'email', 'value': link['href'][7:], 'confidence': 1.0})
+        
+        return results
+
 
 
 # Usage example
