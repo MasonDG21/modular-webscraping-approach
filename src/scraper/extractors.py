@@ -24,17 +24,21 @@ class BaseExtractor(ABC):
 
     def clean_text(self, text):
         """Remove extra whitespace and normalize text."""
-        return ' '.join(text.split())
-
+        cleaned = re.sub(r'\s+', ' ', text).strip()
+        self.logger.debug(f"Cleaned text. Original length: {len(text)}, Cleaned length: {len(cleaned)}")
+        return cleaned
+    
     def find_all_matches(self, pattern, text):
         """Find all matches of a regex pattern in the text."""
-        return re.findall(pattern, text)
+        matches = re.findall(pattern, text)
+        self.logger.debug(f"Found {len(matches)} matches for pattern: {pattern}")
+        return matches
 
     def log_extraction(self, content_type, results):
         """Log the results of an extraction."""
         self.logger.info(f"Extracted {len(results)} {content_type}(s)")
         for result in results:
-            self.logger.debug(f"Extracted {content_type}: {result['value']}")
+            self.logger.info(f"Extracted {content_type}: {result['value']}")
 
     def safe_extract(self, content):
         """Safely perform extraction with error handling."""
@@ -53,8 +57,20 @@ class EmailExtractor(BaseExtractor):
         self.email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
 
     def extract(self, content):
+        self.logger.debug(f"Extracting emails from content (length: {len(content)})")
+        
+        # Ensure the content is always a string
+        if not isinstance(content, str):
+            self.logger.info(f"Email content received was not a string (type: {type(content)}). Converting to string.")
+            if isinstance(content, list):
+                content = ' '.join(map(str, content))  # Convert list elements to strings and join
+            else:
+                content = str(content)  # Convert other types to string
+            self.logger.info("Content converted to string.")
+            
         cleaned_content = self.clean_text(content)
         emails = self.find_all_matches(self.email_pattern, cleaned_content)
+        self.logger.info(f"Found {len(emails)} emails.")
         return [{'type': 'email', 'value': email} for email in emails]
 
 
@@ -64,6 +80,14 @@ class FullNameExtractor(BaseExtractor):
         super().__init__()  # Ensure BaseExtractor's constructor is called
         
     def extract(self, content):
+        # Ensure the content is always a string
+        if not isinstance(content, str):
+            self.logger.debug(f"Content received was not a string (type: {type(content)}). Converting to string.")
+            if isinstance(content, list):
+                content = ' '.join(map(str, content))  # Convert list elements to strings and join
+            else:
+                content = str(content)  # Convert other types to string
+
         matches = self.name_pattern.findall(content)
         return [{'type': 'name', 'value': name.strip()} for name in matches]
 
@@ -74,6 +98,14 @@ class PhoneExtractor(BaseExtractor):
         self.phone_pattern = r'\+?[\d\s.-]+\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}'
 
     def extract(self, content):
+        # Ensure the content is always a string
+        if not isinstance(content, str):
+            self.logger.debug(f"Content received was not a string (type: {type(content)}). Converting to string.")
+            if isinstance(content, list):
+                content = ' '.join(map(str, content))  # Convert list elements to strings and join
+            else:
+                content = str(content)  # Convert other types to string
+
         cleaned_content = self.clean_text(content)
         phone_numbers = self.find_all_matches(self.phone_pattern, cleaned_content)
         return [{'type': 'phone', 'value': phone.strip()} for phone in phone_numbers]
@@ -111,23 +143,34 @@ class TitleExtractor(BaseExtractor):
             'Customer Support Engineer', 'Technical Support Specialist', 'Field Operations Manager',
             'Quality Assurance Manager', 'Regulatory Affairs Manager', 'Patent Agent', 'Legal Counsel'
         ]
-
         self.title_pattern = r'\b(' + '|'.join(self.title_keywords) + r')\b'
 
     def extract(self, content):
+        self.logger.debug(f"Extracting Titles from content (length: {len(content)})")
+        if not isinstance(content, str):
+            self.logger.info(f"Title content recieved was not type: `str` in TitleExtractor.")
+        if isinstance(content, list):
+            content = ' '.join(map(str, content)) # Convert all elements to strings and join them
+            self.logger.info("List Converted to string.")
+        else:
+            content = str(content)
+            self.logger.info(f"{type(content)} converted to string.")
+        
         cleaned_content = self.clean_text(content)
         exact_matches = self.find_all_matches(self.title_pattern, cleaned_content)
         fuzzy_matches = self.fuzzy_match_titles(cleaned_content)
         
         results = [{'type': 'title', 'value': title, 'confidence': 1.0} for title in exact_matches]
         results.extend([{'type': 'title', 'value': title, 'confidence': score / 100} for title, score in fuzzy_matches])
-        
+        self.logger.info(f"Found {len(results)} Titles.")
         return results
 
     def fuzzy_match_titles(self, text):
+        self.logger.info("Fuzzy matching titles.")
         words = text.split()
-        potential_titles = [' '.join(words[i:i+3]) for i in range(len(words))]
-        matches = process.extract(potential_titles, self.title_keywords, limit=5)
+        potential_titles = [' '.join(words[i:i+3]) for i in range(len(words) - 2)]
+        matches = process.extract(' '.join(potential_titles), self.title_keywords, limit=5)
+        self.logger.info(f"Found {len(matches)} fuzzy matches.")
         return [(match[0], match[1]) for match in matches if match[1] > 80]
 
 
@@ -153,9 +196,20 @@ class ContextualExtractor(BaseExtractor):
         }
 
     def extract(self, content):
+        self.logger.debug(f"Extracting contextual information from content (length: {len(content)})")
+        
+        # input content should always be a string.
+        if not isinstance(content, str):
+            self.logger.info(f"Content received was not a string (type: {type(content)}). Converting to string.")
+            if isinstance(content, list):
+                content = ' '.join(map(str, content))  # Convert list elements to strings and join
+            else:
+                content = str(content)  # Convert other types to string
+                
         soup = BeautifulSoup(content, 'html.parser')
         contextual_elements = self.find_contextual_elements(soup)
         results = []
+        
         for element, weight in contextual_elements:
             results.extend(self.extract_from_element(element, weight))
         
@@ -231,23 +285,27 @@ class ContextualExtractor(BaseExtractor):
                 data = json.loads(script.string)
                 if isinstance(data, list):
                     data = data[0]
-                if data['@type'] in ['Person', 'Organization']:
-                    if 'name' in data:
-                        results.append({'type': 'name', 'value': data['name'], 'confidence': 0.95})
-                    if 'email' in data:
-                        results.append({'type': 'email', 'value': data['email'], 'confidence': 0.95})
-                    if 'telephone' in data:
-                        results.append({'type': 'phone', 'value': data['telephone'], 'confidence': 0.95})
-                    if 'jobTitle' in data:
-                        results.append({'type': 'title', 'value': data['jobTitle'], 'confidence': 0.95})
-            except json.JSONDecodeError:
-                self.logger.warning("Failed to parse JSON-LD data")
+                if isinstance(data, dict) and '@type' in data:
+                    if data['@type'] in ['Person', 'Organization']:
+                        if 'name' in data:
+                            results.append({'type': 'name', 'value': data['name'], 'confidence': 0.95})
+                        if 'email' in data:
+                            results.append({'type': 'email', 'value': data['email'], 'confidence': 0.95})
+                        if 'telephone' in data:
+                            results.append({'type': 'phone', 'value': data['telephone'], 'confidence': 0.95})
+                        if 'jobTitle' in data:
+                            results.append({'type': 'title', 'value': data['jobTitle'], 'confidence': 0.95})
+            except (json.JSONDecodeError, KeyError) as e:
+                self.logger.warning(f"Failed to parse JSON-LD data: {e}")
         
         return results
 
 
 class HTMLParser:
     def parse(self, html):
+        if isinstance(html, list):
+            self.logger.info("HTML content recieved was type: `list` in HTMLParser")
+            html = ' '.join(map(str, html)) # Convert all elements to strings and join them
         soup = BeautifulSoup(html, 'html.parser')
         parsed_content = {
             'text': soup.get_text(),
@@ -322,31 +380,78 @@ class ContactInfoExtractor:
         self.registry.register('contextual', ContextualExtractor(self.registry))
         self.html_parser = HTMLParser()
         self.result_aggregator = ResultAggregator()
+        self.logger = get_logger(self.__class__.__name__)
 
     def extract_contact_info(self, url, html):
+        # status object for debugging
+        status = {
+            'url': url,
+            'status': 'success',
+            'errors': [],
+            'warnings': [],
+            'extracted_info': []
+        }
+        
         try:
+            # Ensure the HTML content is always a string
+            if not isinstance(html, str):
+                self.logger.debug(f"HTML content received was not a string (type: {type(html)}). Converting to string.")
+                if isinstance(html, list):
+                    html = ' '.join(map(str, html))  # Convert list elements to strings and join
+                else:
+                    html = str(html)  # Convert other types to string
+            
             parsed_content = self.html_parser.parse(html)
+            self.logger.debug(f"Parsed content:\n {parsed_content}\n\n")
             results = []
             
             # Use Contextual Extractor First
             contextual_extractor = self.registry.get_extractor('contextual')
-            results.extend(contextual_extractor.extract(html))
+            try:
+                contextual_results = contextual_extractor.extract(html)
+                results.extend(contextual_results)
+                self.logger.info(f"Extracted {len(contextual_results)} contextual items from URL: {url}")
+            except Exception as e:
+                status['warnings'].append(f"Contextual Extraction failed: {str(e)}")
+                self.logger.warning(f"Contextual Extraction failed for {url}: {str(e)}", exc_info=True)
             
             # Then use other extractors for any remaining content
             for extractor_name in ['email', 'name', 'phone', 'title']:
                 extractor = self.registry.get_extractor(extractor_name)
-                results.extend(extractor.extract(parsed_content['text']))
-                for meta in parsed_content['meta']:
-                    results.extend(extractor.extract(meta))
-                for link in parsed_content['links']:
-                    results.extend(extractor.extract(link['text']))
-                    if extractor_name == 'email' and link['href'].startswith('mailto:'):
-                        results.append({'type': 'email', 'value': link['href'][7:], 'confidence': 1.0})
+                self.logger.debug(f"Extracting with {extractor_name} from URL: {url}")
+                
+                try:
+                    # Handle text content
+                    text_content = ' '.join(parsed_content['text']) if isinstance(parsed_content['text'], list) else str(parsed_content['text'])
+                    results.extend(extractor.safe_extract(text_content))
+                    
+                    # Handle meta content
+                    meta_content = ' '.join(parsed_content['meta']) if isinstance(parsed_content['meta'], list) else str(parsed_content['meta'])
+                    results.extend(extractor.safe_extract(meta_content))
+                    
+                    # Handle links content
+                    for link in parsed_content['links']:
+                        link_text = link['text'] if isinstance(link['text'], str) else ' '.join(map(str, link['text']))
+                        results.extend(extractor.safe_extract(link_text))
+                        
+                        if extractor_name == 'email' and link['href'].startswith('mailto:'):
+                            results.append({'type': 'email', 'value': link['href'][7:], 'confidence': 1.0})
+                    
+                except Exception as e:
+                    status['warnings'].append(f"{extractor_name.capitalize()} extraction failed: {str(e)}")
+                    self.logger.warning(f"{extractor_name.capitalize()} extraction failed for {url}: {str(e)}", exc_info=True)
+            
+            aggregated_results = self.result_aggregator.aggregate(results)
+            status['extracted_info'] = aggregated_results
+            self.logger.info(f"Successfully extracted and aggregated {len(aggregated_results)} results from URL: {url}")
+            
+            return status
 
-            return self.result_aggregator.aggregate(results)
         except Exception as e:
-            logger.error(f"Error extracting contact info from {url}: {str(e)}")
-            return []
+            status['success'] = False
+            status['errors'].append(str(e))
+            self.logger.error(f"Error extracting contact info from {url}: {str(e)}", exc_info=True)
+            return status
 
 
 # Usage example
