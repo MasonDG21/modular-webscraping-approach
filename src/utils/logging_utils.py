@@ -1,5 +1,6 @@
 import logging
 import os
+from logging.handlers import RotatingFileHandler
 
 def setup_logging(log_level=logging.INFO):
     log_dir = 'logs'
@@ -10,10 +11,16 @@ def setup_logging(log_level=logging.INFO):
         level=log_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(os.path.join(log_dir, "scraper.log")),
+            RotatingFileHandler(
+                os.path.join(log_dir, "scraper.log"),
+                maxBytes=10*1024*1024,
+                backupCount=5
+            ),
             logging.StreamHandler()
         ]
     )
 
 def get_logger(name):
-    return logging.getLogger(name)
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG) # set to DEBUG to see all logs
+    return logger
