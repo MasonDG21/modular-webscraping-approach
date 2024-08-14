@@ -29,39 +29,39 @@ class BaseExtractor(ABC):
         cleaned = re.sub(r'\s+', ' ', text).strip()
         
         if not cleaned:
-            self.logger.warning(f"Cleaning resulted in empty string. Reverted to original: '{text}'")
+            # self.logger.warning(f"Cleaning resulted in empty string. Reverted to original: '{text}'")
             return text  # Return original text if cleaning results in empty string
         
-        self.logger.debug(f"Cleaned text. Original length: {len(text)}, Clean length: {len(cleaned)} | Clean Text: {cleaned}")
+        #self.logger.debug(f"Cleaned text. Original length: {len(text)}, Clean length: {len(cleaned)} | Clean Text: {cleaned}")
         return cleaned
     
     def find_all_matches(self, pattern, text):
         """Find all matches of a regex pattern in the text."""
         if not text:
-            self.logger.warning("Text for find_all_matches is empty. No matches found.")
+            # self.logger.warning("Text for find_all_matches is empty. No matches found.")
             return []
         matches = re.findall(pattern, text)
-        self.logger.debug(f"Found {len(matches)} matches for pattern in text: {text}")
+        #self.logger.debug(f"Found {len(matches)} matches for pattern in text: {text}")
         return matches
 
     def log_extraction(self, content_type, results):
         """Log the results of an extraction."""
-        self.logger.info(f"Extracted {len(results)} {content_type}(s)")
+        # self.logger.info(f"Extracted {len(results)} {content_type}(s)")
         for result in results:
             self.logger.info(f"Extracted {content_type}: {result['value']}")
 
     def safe_extract(self, content):
         """Safely perform extraction with error handling."""
         if not content or len(content) < MIN_QUERY_LENGTH:
-            self.logger.warning(f"Content too short for extraction: {content}")
-            return []
+            # self.logger.warning(f"Content too short for extraction: {content}")
+            return [{'type': self.__class__.__name__.replace('Extractor', '').lower(), 'value': 'not_found'}]
         try:
             results = self.extract(content)
             self.log_extraction(self.__class__.__name__.replace('Extractor', '').lower(), results)
             return results
         except Exception as e:
             self.logger.error(f"Error during extraction: {str(e)}")
-            return []
+            return content
 
 
 class EmailExtractor(BaseExtractor):
@@ -70,20 +70,21 @@ class EmailExtractor(BaseExtractor):
         self.email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
 
     def extract(self, content):
-        self.logger.debug(f"Extracting emails from content (length: {len(content)})")
+        #self.logger.debug(f"Extracting emails from content (length: {len(content)}): {content}")
         
         # Ensure the content is always a string
         if not isinstance(content, str):
-            self.logger.info(f"Email content received was not a string (type: {type(content)}). Converting to string.")
+            self.logger.info(f"Content received was not a string (type: {type(content)}). Converted to string.")
             if isinstance(content, list):
                 content = ' '.join(map(str, content))  # Convert list elements to strings and join
             else:
                 content = str(content)  # Convert other types to string
-            self.logger.info("Content converted to string.")
+            # self.logger.info("Content converted to string.")
             
         cleaned_content = self.clean_text(content)
+        # self.logger.info(f"Cleaned Email: {cleaned_content}")
         emails = self.find_all_matches(self.email_pattern, cleaned_content)
-        self.logger.info(f"Found {len(emails)} emails.")
+        self.logger.info(f"Emails Matched: {len(emails)} emails.")
         return [{'type': 'email', 'value': email} for email in emails]
 
 
@@ -216,27 +217,30 @@ class TitleExtractor(BaseExtractor):
         self.title_pattern = re.compile(r'\b(' + '|'.join(self.title_keywords) + r')\b', re.IGNORECASE)
 
     def extract(self, content):
-        self.logger.debug(f"Extracting Titles from content (length: {len(content)})")
+        # self.logger.debug(f"Extracting Titles from content (length: {len(content)})")
         if not isinstance(content, str):
             self.logger.info(f"Title content recieved was not type: `str` in TitleExtractor.")
         if isinstance(content, list):
             content = ' '.join(map(str, content)) # Convert all elements to strings and join them
-            self.logger.info("List Converted to string.")
+            # self.logger.info("List Converted to string.")
         else:
             content = str(content)
-            self.logger.info(f"{type(content)} converted to string.")
+            # self.logger.info(f"{type(content)} converted to string.")
         
         cleaned_content = self.clean_text(content)
         exact_matches = self.find_all_matches(self.title_pattern, cleaned_content)
         fuzzy_matches = self.fuzzy_match_titles(cleaned_content)
-        
-        results = [{'type': 'title', 'value': title, 'confidence': 1.0} for title in exact_matches]
-        results.extend([{'type': 'title', 'value': title, 'confidence': score / 100} for title, score in fuzzy_matches])
+        # score = 1.1
+        # the Title Extractor is the only
+        # results = [{'type': 'title', 'value': title} for title in exact_matches]
+        # results.extend([{'type': 'title', 'value': title,} for title, score in fuzzy_matches])        
+        results = [{'type': 'title', 'value': title} for title in exact_matches]
+        results.extend([{'type': 'title', 'value': title} for title, _ in fuzzy_matches])
         self.logger.info(f"Found {len(results)} Titles.")
         return results
 
     def fuzzy_match_titles(self, text):
-        self.logger.info("Fuzzy matching titles.")
+        # self.logger.info("Fuzzy matching titles.")
         words = text.split()
         
         # Dynamically generate potential titles by combining 3 words at a time
@@ -245,7 +249,7 @@ class TitleExtractor(BaseExtractor):
             potential_titles = [' '.join(words[i:i+3]) for i in range(len(words) - n + 1)]
             
         matches = process.extract(' '.join(potential_titles), self.title_keywords, limit=5)
-        self.logger.info(f"Found {len(matches)} fuzzy matches.")
+        # self.logger.info(f"Found {len(matches)} fuzzy matches.")
         return [(match[0], match[1]) for match in matches if match[1] > 30]
 
 
@@ -264,6 +268,7 @@ class ContextualExtractor(BaseExtractor):
     def __init__(self, registry):
         super().__init__()
         self.registry = registry
+        # self.logger = get_logger(self.__class__.__name__)
         self.context_keywords = {
             'high': ['about', 'team', 'contact', 'leadership', 'management', 'staff', 'employees', 'board', 'executives'],
             'medium': ['directory', 'people', 'department', 'faculty', 'personnel', 'crew', 'members', 'positions', 'roles'],
@@ -324,7 +329,7 @@ class ContextualExtractor(BaseExtractor):
                 extracted = extractor.extract(text)
                 for item in extracted:
                     confidence = self.calculate_confidence(item, context_weight)
-                    results.append({**item, 'confidence': confidence})
+                    results.append({'type': item['type'], 'value': item['value']})
         
         return results
 
@@ -345,13 +350,13 @@ class ContextualExtractor(BaseExtractor):
             tel = vcard.find(class_='tel')
             
             if name:
-                results.append({'type': 'name', 'value': name.get_text(), 'confidence': 0.9})
+                results.append({'type': 'name', 'value': name.get_text()})
             if org:
-                results.append({'type': 'organization', 'value': org.get_text(), 'confidence': 0.9})
+                results.append({'type': 'organization', 'value': org.get_text()})
             if email:
-                results.append({'type': 'email', 'value': email.get_text(), 'confidence': 0.9})
+                results.append({'type': 'email', 'value': email.get_text()})
             if tel:
-                results.append({'type': 'phone', 'value': tel.get_text(), 'confidence': 0.9})
+                results.append({'type': 'phone', 'value': tel.get_text()})
         
         # Extract JSON-LD data
         json_ld_scripts = soup.find_all('script', type='application/ld+json')
@@ -363,13 +368,13 @@ class ContextualExtractor(BaseExtractor):
                 if isinstance(data, dict) and '@type' in data:
                     if data['@type'] in ['Person', 'Organization']:
                         if 'name' in data:
-                            results.append({'type': 'name', 'value': data['name'], 'confidence': 0.95})
+                            results.append({'type': 'name', 'value': data['name']})
                         if 'email' in data:
-                            results.append({'type': 'email', 'value': data['email'], 'confidence': 0.95})
+                            results.append({'type': 'email', 'value': data['email']})
                         if 'telephone' in data:
-                            results.append({'type': 'phone', 'value': data['telephone'], 'confidence': 0.95})
+                            results.append({'type': 'phone', 'value': data['telephone']})
                         if 'jobTitle' in data:
-                            results.append({'type': 'title', 'value': data['jobTitle'], 'confidence': 0.95})
+                            results.append({'type': 'title', 'value': data['jobTitle']})
             except (json.JSONDecodeError, KeyError) as e:
                 self.logger.warning(f"Failed to parse JSON-LD data: {e}")
         
@@ -379,7 +384,7 @@ class ContextualExtractor(BaseExtractor):
 class HTMLParser:
     def parse(self, html):
         if isinstance(html, list):
-            self.logger.info("HTML content recieved was type: `list` in HTMLParser")
+            # self.logger.info("HTML content recieved was type: `list` in HTMLParser")
             html = ' '.join(map(str, html)) # Convert all elements to strings and join them
         soup = BeautifulSoup(html, 'html.parser')
         parsed_content = {
@@ -401,29 +406,48 @@ class HTMLParser:
 
 
 class ResultAggregator:
-    """A class that:
-    1. Takes a list of results.
-    2. Aggregates them based on type & value.
+    """A class that takes a list of results and Aggregates them based on type & value.
     
     Methods:
         aggregate: Aggregates the given list of results.
     """
+    def __init__(self):
+        self.logger = get_logger(self.__class__.__name__)
+             
     def aggregate(self, results):
+        self.logger.info(f"Aggregating {len(results)} results.")
         
         # Initialize an empty dictionary `aggregated` to store the final results
         aggregated = {}
         
         # Iterate over each result in the given list of results
         for result in results:
-            if result['type'] not in aggregated:
-                aggregated[result['type']] = {}
+            self.logger.debug(f"Processing Result: {result}")
+            if isinstance(result, str):
+                self.logger.warning(f"String result (skipped): {result}")
+                continue
+            
+            if not isinstance(result, dict) or 'type' not in result or 'value' not in result:
+                self.logger.warning(f"Skipping improperly formatted result: {result}")
+                continue
+            
+            result_type = result['type']
             value = result['value']
-            if value not in aggregated[result['type']]:
-                aggregated[result['type']][value] = result.get('confidence', 1.0)
-            else:
-                aggregated[result['type']][value] = max(aggregated[result['type']][value], result.get('confidence', 1.0))
-        
-        return [{'type': k, 'value': v, 'confidence': conf} for k, values in aggregated.items() for v, conf in values.items()]
+            
+            # Skip any results where the value is 'not_found'
+            if value == 'not_found':
+                self.logger.debug(f"Skipping result with value 'not_found': {result}")
+                continue
+            
+            # If result_type is not in aggregated, initialize it
+            if result_type not in aggregated:
+                aggregated[result_type] = set()  # Use a set to avoid duplicate values
+            
+            # Add the value to the set for this result_type
+            aggregated[result_type].add(value)
+    
+        # Convert the aggregated dictionary back to a list of dictionaries without confidence
+        return [{'type': k, 'value': v} for k, values in aggregated.items() for v in values]
 
 
 class Registry:
@@ -468,40 +492,47 @@ class ContactInfoExtractor:
         
         try:
             if not isinstance(html, str):
-                self.logger.debug(f"HTML content received was not a string (type: {type(html)}). Converting to string.")
+                # self.logger.debug(f"HTML content received was not a string (type: {type(html)}). Converting to string.")
                 html = self.convert_to_string(html)
             
             if not html:
-                self.logger.warning(f"Empty HTML content for URL: {url}")
+                self.logger.warning(f"No HTML content recieved for URL: {url}")
                 status['warnings'].append("Empty HTML content")
                 return status
-
             parsed_content = self.html_parser.parse(html)
-            self.logger.debug(f"Parsed content:\n {parsed_content}\n\n")
             results = []
             
-            # Use Contextual Extractor First
+            # Try Contextual Extractor First
             contextual_extractor = self.registry.get_extractor('contextual')
             try:
                 contextual_results = contextual_extractor.extract(html)
                 results.extend(contextual_results)
-                self.logger.info(f"Extracted {len(contextual_results)} contextual items from URL: {url}")
+                
             except Exception as e:
                 status['warnings'].append(f"Contextual Extraction failed: {str(e)}")
                 self.logger.warning(f"Contextual Extraction failed for {url}: {str(e)}", exc_info=True)
             
-            # Then use other extractors for any remaining content
-            for extractor_name in ['email', 'name', 'phone', 'title']:
+            # Try other extractors for any remaining content
+            for extractor_name in ['email', 'name', 'title']:
+                
                 extractor = self.registry.get_extractor(extractor_name)
-                self.logger.debug(f"Extracting with {extractor_name} from URL: {url}")
+                self.logger.debug(f"Extracting ``{extractor_name}'s`` from: {url}")
                 
                 try:
                     results.extend(self.extract_from_parsed_content(extractor, parsed_content))
                 except Exception as e:
                     status['warnings'].append(f"{extractor_name.capitalize()} extraction failed: {str(e)}")
                     self.logger.warning(f"{extractor_name.capitalize()} extraction failed for {url}: {str(e)}", exc_info=True)
+            self.logger.info(f"Total results before aggregation: {len(results)}")
+            count = 1
+            for result in results:
+                c = count++1
+                self.logger.debug(f"Result Before Aggregation {c}. {result}")
             
-            aggregated_results = self.result_aggregator.aggregate(results)
+            valid_results = [r for r in results if isinstance(r, dict) and 'type' in r and 'value' in r]
+            self.logger.debug(f"Valid Results before aggregation: {valid_results}")
+            
+            aggregated_results = self.result_aggregator.aggregate(valid_results)
             status['extracted_info'] = aggregated_results
             self.logger.info(f"Successfully extracted and aggregated {len(aggregated_results)} results from URL: {url}")
             
@@ -518,7 +549,6 @@ class ContactInfoExtractor:
             return ' '.join(map(str, content))
         return str(content)
 
-        
     def extract_from_parsed_content(self, extractor, parsed_content):
         results = []
         
@@ -545,15 +575,40 @@ class ContactInfoExtractor:
 # Usage example
 if __name__ == "__main__":
     extractor = ContactInfoExtractor()
-    sample_html = """
-    <html><body>
-    <div class="about-team">
-        <p>John Doe - Chief Executive Officer</p>
-        <p>Email: john.doe@example.com</p>
-        <a href="mailto:jane@example.com">Contact Jane Smith, VP of Marketing</a>
-        <div class="contact">Phone: (123) 456-7890</div>
-    </div>
-    </body></html>
-    """
-    results = extractor.extract_contact_info("https://example.com", sample_html)
+    
+    html_file_path = "C:\\Users\\mason\\OneDrive\\Desktop\\Organized\\Projects\\Personal\\PythonProjects\\modular-webscraping-approach\\tests\\sample.html"
+    
+    # Read the HTML content from the file
+    with open(html_file_path, 'r', encoding='utf-8') as file:
+        sample_html = file.read()
+    
+    # Extract contact information
+    results = extractor.extract_contact_info("https://grantcardonelicensee.com/licensee/aaron-goodwin-indiana/", sample_html)
+    
+    # Print the results
     print(results)
+
+# if __name__ == "__main__":
+#     # cIExtractor = ContactInfoExtractor()
+#     emailExtractor = EmailExtractor()
+    
+#     # html_file_path = os.path.join(os.path.dirname(__file__), 'relative/path/to/your/directory', 'sample.html')
+    
+#     # with open(html_file_path, 'r', encoding='utf-8') as file:
+#     #     sample_html = file.read()
+        
+#     sample_html = """
+#     <html><body>
+#     <div class="about-team">
+#         <p>John Doe - Chief Executive Officer</p>
+#         <p>Email: john.doe@example.com</p>
+#         <a href="mailto:jane@example.com">Contact Jane Smith, VP of Marketing</a>
+#         <div class="contact">Phone: (123) 456-7890</div>
+#     </div>
+#     </body></html>
+#     """
+#     #results = cIExtractor.extract_contact_info("https://example.com", sample_html)
+    
+#     email = emailExtractor.extract(sample_html)
+    
+#     print(email)
