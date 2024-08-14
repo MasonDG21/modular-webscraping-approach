@@ -38,7 +38,7 @@ class AsyncScraper:
         async with aiohttp.ClientSession(headers=self.headers) as session:
             queue = asyncio.PriorityQueue()
             await queue.put((0, start_url, 0))  # (priority, url, depth)
-            results = []
+            results = {}
 
             while not queue.empty():
                 _, url, depth = await queue.get()
@@ -51,12 +51,23 @@ class AsyncScraper:
                 self.seen_urls.add(url)
                 html = await self.fetch_html(session, url)
                 if html:
+                    
                     # make sure html is a string before passing it to extract_contact_info
                     if isinstance(html, list):
-                        self.logger.info(f"HTML received by `scrape` was type: `list` for URL: {url}")
+                        self.logger.info(f"HTML received in `scrape` was type: `list` for URL: {url}")
                         html = ' '.join(map(str, html))
                     page_results = self.extractor.extract_contact_info(url, html)
-                    results.extend(page_results)
+                    self.logger.info(f"Results from ContactInfoExtractor() for {url}: {page_results}")
+                    
+                    if isinstance(page_results, dict):
+                        page_results = [page_results]
+                        
+                    elif not isinstance(page_results, list):
+                        self.logger.error(f"Unexpected result from extract_contact_info for URL {url}: {type(page_results)}")
+                        page_results = []
+                        
+                    # Store results for each URL 
+                    results[url] = page_results  
 
                     if depth < self.max_depth:
                         await self.enqueue_related_urls(queue, html, url, depth)
