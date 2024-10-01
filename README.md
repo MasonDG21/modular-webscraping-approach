@@ -20,18 +20,14 @@
 ```mermaid
 graph TD
     A[User Interface
-    `main.py`] -->|User Inputs| B[Scraper Engine
-    
-    `scraper.py`]
+    'main.py'] -->|User Inputs| B[Scraper Engine
+    'scraper.py']
     B -->|List of URLs| D[Contact Info Extractor
-    
-    `contact_info.py`]
-    B -->|Contact Info| E[CSV Utilities
-    
-    `csv_utils.py`]
+    'contact_info.py']
+    B -->|Validated Contact Info| E[CSV Utilities
+    'csv_utils.py']
     G[Utilities
-    
-    `utils.py`] --> B
+    'utils.py'] --> B
     G --> D
     B -->|Progress Updates| A
 ```
